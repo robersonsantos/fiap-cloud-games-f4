@@ -117,6 +117,7 @@ O Terraform cria:
 | Amazon OpenSearch (`fcg-search`) | Busca avançada |
 | Secrets Manager `fcg/app` | **Todas** as senhas, geradas automaticamente |
 | Usuário IAM `fcg-github-actions` (permissão mínima) | Identidade da pipeline: só ECR, `eks:DescribeCluster` e leitura do segredo `fcg/app` |
+| Role `fcg-console-viewer` (somente leitura) | Navegar no Console AWS e ver nós/pods do EKS sem poder alterar nada nem ler valores de segredos |
 | AWS Budget | Alerta de custo por e-mail (confirme a inscrição no e-mail recebido) |
 
 > **Por que não OIDC?** A organização AWS desta conta bloqueia `iam:CreateOpenIDConnectProvider`.
