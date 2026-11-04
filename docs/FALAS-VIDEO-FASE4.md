@@ -105,8 +105,8 @@ Os comandos e o que aparece na tela de cada cena estão no [ROTEIRO-VIDEO-FASE4.
 > E este é o Amazon OpenSearch, o serviço gerenciado de busca que o Roberson vai demonstrar daqui a pouco.
 
 ### C05 · Glayson · 3:39 a 4:34 (55 s)
-**[TELA]** Secrets Manager → `fcg/app` → *Retrieve secret value* mostrando **somente as chaves** (sem os valores).
-Depois, VS Code com a pasta `infra/terraform`.
+**[TELA]** Secrets Manager → `fcg/app` (detalhes do segredo; **os valores nunca aparecem**). Depois, VS Code com
+`infra/terraform/secrets.tf` (senhas geradas por `random_password`) e `eks.tf`.
 
 > Segurança: nenhuma string de conexão, chave ou senha está no código ou nos arquivos YAML.
 >
@@ -167,8 +167,8 @@ Depois, VS Code com a pasta `infra/terraform`.
 > automaticamente.
 
 ### C09 · Diogo · 7:48 a 8:38 (50 s)
-**[TELA]** Dois terminais lado a lado: (A) `kubectl get pods -w`; (B) loop chamando `/api/catalogo/versao`.
-Depois, VS Code alterando a constante `Mensagem` em `VersaoController.cs`, `git commit` e `git push`.
+**[TELA]** Tela dividida: (A) `kubectl get pods -w`; (B) loop chamando `/api/catalogo/versao`. Depois, VS Code
+alterando a constante `Mensagem` em `VersaoController.cs`, e o terminal com `git commit` e `git push`.
 
 > Agora o live deploy. À esquerda, os pods da CatalogAPI. À direita, um loop que consulta a API a cada
 > meio segundo e mostra a mensagem da versão atual e qual pod respondeu.
@@ -218,7 +218,7 @@ Depois, VS Code alterando a constante `Mensagem` em `VersaoController.cs`, `git 
 > Ele já aparece no resultado.
 
 ### C14 · Roberson · 11:23 a 12:08 (45 s)
-**[TELA]** VS Code em `JogoService.cs` (`SincronizarIndiceAsync`) → opcional: OpenSearch Dashboards.
+**[TELA]** VS Code em `JogoService.cs` (`SincronizarIndiceAsync` / `RemoverDoIndiceAsync`) → `SearchIndexInitializer.cs`.
 
 > Um cuidado de resiliência: o SQL Server continua sendo a fonte da verdade. Se o OpenSearch estiver
 > fora do ar, o cadastro do jogo não é perdido; a falha fica registrada no log, e um endpoint de
