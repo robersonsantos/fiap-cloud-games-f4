@@ -10,7 +10,7 @@ namespace FCG.Catalog.API.Controllers;
 public class VersaoController : ControllerBase
 {
     // Altere esta mensagem, faça push e veja a pipeline publicar a nova versão sem downtime.
-    private const string Mensagem = "FIAP Cloud Games — Fase 4 no Amazon EKS";
+    private const string Mensagem = "Live Deploy do Grupo 94 funcionando!";
 
     private readonly IConfiguration _configuration;
 
