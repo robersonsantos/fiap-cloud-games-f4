@@ -199,7 +199,7 @@ spec:
     spec:
       containers:
       - name: grafana
-        image: grafana/grafana:latest
+        image: grafana/grafana:11.6.3
         ports:
         - containerPort: 3000
         env:
@@ -225,10 +225,10 @@ spec:
           mountPath: /var/lib/grafana/dashboards
         resources:
           requests:
-            memory: "128Mi"
+            memory: "256Mi"
             cpu: "100m"
           limits:
-            memory: "256Mi"
+            memory: "640Mi"
             cpu: "300m"
       volumes:
       - name: datasources
