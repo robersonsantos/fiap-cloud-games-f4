@@ -113,6 +113,9 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=${{ inputs.service }}
           cache-to: type=gha,mode=max,scope=${{ inputs.service }}
+          # Manifesto de imagem simples: o scan básico do ECR não analisa image indexes com attestations.
+          provenance: false
+          sbom: false
 
       - name: Security scan (Amazon ECR image scanning)
         env:
@@ -120,6 +123,14 @@ jobs:
           TAG: ${{ steps.meta.outputs.tag }}
           FAIL_ON_CRITICAL: ${{ inputs.fail_on_critical }}
         run: |
+          # O scan on push às vezes ainda não foi registrado: garante o início antes de esperar.
+          for i in 1 2 3 4 5 6; do
+            STATUS=$(aws ecr describe-images --repository-name "$REPO_NAME" --image-ids imageTag="$TAG" \
+                      --query 'imageDetails[0].imageScanStatus.status' --output text 2>/dev/null || echo NONE)
+            [ "$STATUS" != "None" ] && [ "$STATUS" != "NONE" ] && break
+            aws ecr start-image-scan --repository-name "$REPO_NAME" --image-id imageTag="$TAG" >/dev/null 2>&1 || true
+            sleep 5
+          done
           aws ecr wait image-scan-complete --repository-name "$REPO_NAME" --image-id imageTag="$TAG"
           COUNTS=$(aws ecr describe-image-scan-findings --repository-name "$REPO_NAME" --image-id imageTag="$TAG" \
                     --query 'imageScanFindings.findingSeverityCounts' --output json)

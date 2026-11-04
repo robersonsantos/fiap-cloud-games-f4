@@ -26,6 +26,7 @@ data "aws_iam_policy_document" "github_permissions" {
       "ecr:GetDownloadUrlForLayer",
       "ecr:InitiateLayerUpload",
       "ecr:PutImage",
+      "ecr:StartImageScan",
       "ecr:UploadLayerPart",
     ]
     resources = [for r in aws_ecr_repository.service : r.arn]
