@@ -1,0 +1,131 @@
+# CatalogAPI — catálogo (SQL Server), avaliações (MongoDB), cache (Redis) e busca (OpenSearch).
+# ${IMAGE} é preenchido pela pipeline (ECR + tag do commit). Credenciais vêm do Secret
+# fcg-secrets em tempo de execução; connection strings são montadas no pod via $(VAR).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-api
+  namespace: fcg
+  labels:
+    app: catalog-api
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  # Rolling Update sem downtime: sobe 1 pod novo e só derruba um antigo quando o novo estiver Ready.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: catalog-api
+  template:
+    metadata:
+      labels:
+        app: catalog-api
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: catalog-api
+        image: ${IMAGE}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        envFrom:
+        - configMapRef:
+            name: fcg-shared-config
+        env:
+        # Imagem implantada (exibida em GET /api/catalogo/versao)
+        - name: APP_VERSION
+          value: "${IMAGE}"
+        # SQL Server (dados transacionais)
+        - name: SA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: SA_PASSWORD
+        - name: ConnectionStrings__DefaultConnection
+          value: "Server=sqlserver,1433;Database=FCG_Catalog;User Id=sa;Password=$(SA_PASSWORD);TrustServerCertificate=True"
+        - name: Jwt__Chave
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: JWT_KEY
+        - name: RabbitMQ__Username
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: RABBITMQ_USER
+        - name: RabbitMQ__Password
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: RABBITMQ_PASSWORD
+        # MongoDB (NoSQL — avaliações)
+        - name: MONGO_USER
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: MONGO_USER
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: MONGO_PASSWORD
+        - name: MongoDb__ConnectionString
+          value: "mongodb://$(MONGO_USER):$(MONGO_PASSWORD)@mongodb:27017/?authSource=admin"
+        # Redis (cache distribuído)
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: REDIS_PASSWORD
+        - name: Redis__ConnectionString
+          value: "redis:6379,password=$(REDIS_PASSWORD),abortConnect=false"
+        # Amazon OpenSearch (busca avançada)
+        - name: OpenSearch__Url
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: OPENSEARCH_URL
+        - name: OpenSearch__Username
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: OPENSEARCH_USER
+        - name: OpenSearch__Password
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: OPENSEARCH_PASSWORD
+        resources:
+          requests:
+            memory: "160Mi"
+            cpu: "100m"
+          limits:
+            memory: "448Mi"
+            cpu: "500m"
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 36
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 10
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command: ["sleep", "5"]

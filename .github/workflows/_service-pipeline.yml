@@ -1,0 +1,212 @@
+# Pipeline reutilizável de um microsserviço:
+#   Build & Test → imagem Docker versionada (SHA) → push no Amazon ECR → security scan (ECR)
+#   → deploy no EKS com Rolling Update (sem downtime) e rollback automático em caso de falha.
+name: service-pipeline
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Nome do serviço (deployment/ECR), ex. catalog-api
+        required: true
+        type: string
+      path:
+        description: Pasta do serviço no monorepo, ex. CatalogAPI
+        required: true
+        type: string
+      solution:
+        description: Solução .NET relativa à pasta do serviço
+        required: true
+        type: string
+      fail_on_critical:
+        description: Falha o deploy se o scan encontrar vulnerabilidades CRITICAL
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: "9.0.x"
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+  EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME || 'fcg' }}
+  APP_SECRET_ID: ${{ vars.APP_SECRET_ID || 'fcg/app' }}
+
+jobs:
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.path }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ${{ inputs.solution }}
+
+      - name: Build
+        run: dotnet build ${{ inputs.solution }} -c Release --no-restore
+
+      - name: Testes unitários
+        run: >
+          dotnet test ${{ inputs.solution }} -c Release --no-build
+          --logger "trx;LogFilePrefix=${{ inputs.service }}"
+          --logger "console;verbosity=normal"
+          --results-directory TestResults
+
+      - name: Publicar resultados dos testes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ inputs.service }}
+          path: ${{ inputs.path }}/TestResults
+
+  image:
+    name: Docker → ECR + Scan
+    needs: build-test
+    # Pull requests só validam build/teste; imagem e deploy apenas na main.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Credenciais AWS (usuário de deploy, chave nos GitHub Secrets)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login no Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag da imagem
+        id: meta
+        run: |
+          TAG="${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"
+          REPO="${{ steps.ecr.outputs.registry }}/${{ env.EKS_CLUSTER_NAME }}/${{ inputs.service }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "image=$REPO:$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build & push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ inputs.path }}
+          push: true
+          tags: ${{ steps.meta.outputs.image }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=${{ inputs.service }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.service }}
+
+      - name: Security scan (Amazon ECR image scanning)
+        env:
+          REPO_NAME: ${{ env.EKS_CLUSTER_NAME }}/${{ inputs.service }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          FAIL_ON_CRITICAL: ${{ inputs.fail_on_critical }}
+        run: |
+          aws ecr wait image-scan-complete --repository-name "$REPO_NAME" --image-id imageTag="$TAG"
+          COUNTS=$(aws ecr describe-image-scan-findings --repository-name "$REPO_NAME" --image-id imageTag="$TAG" \
+                    --query 'imageScanFindings.findingSeverityCounts' --output json)
+          echo "Vulnerabilidades encontradas: $COUNTS"
+          {
+            echo "### Security scan — ${{ inputs.service }}:$TAG"
+            echo '```json'
+            echo "$COUNTS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          CRITICAL=$(echo "$COUNTS" | jq '.CRITICAL // 0')
+          if [ "$FAIL_ON_CRITICAL" = "true" ] && [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::$CRITICAL vulnerabilidade(s) CRITICAL na imagem."
+            exit 1
+          fi
+
+  deploy:
+    name: Deploy EKS (Rolling Update)
+    needs: image
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-${{ inputs.service }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Credenciais AWS (GitHub Secrets)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: kubeconfig
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+
+      - name: Aguardar plataforma
+        # No primeiro push, o workflow "platform" roda em paralelo: espera até 15 min por ele.
+        run: |
+          for i in $(seq 1 90); do
+            if kubectl get configmap fcg-shared-config -n fcg >/dev/null 2>&1 \
+               && kubectl get configmap kong-config-template -n fcg >/dev/null 2>&1; then
+              echo "Plataforma pronta."
+              exit 0
+            fi
+            echo "Aguardando o workflow 'platform'... ($i/90)"
+            sleep 10
+          done
+          echo "::error::Plataforma não encontrada no cluster. Execute o workflow 'platform'."
+          exit 1
+
+      - name: Injetar secrets (AWS Secrets Manager → Kubernetes Secret)
+        run: bash deploy/scripts/sync-secrets.sh
+
+      - name: Aplicar manifestos
+        env:
+          IMAGE: ${{ needs.image.outputs.image }}
+        run: |
+          for f in ${{ inputs.path }}/k8s/*.yaml; do
+            envsubst '${IMAGE}' < "$f" | kubectl apply -f -
+          done
+          kubectl annotate deployment/${{ inputs.service }} -n fcg --overwrite \
+            kubernetes.io/change-cause="${{ github.sha }} por ${{ github.actor }}: ${IMAGE}"
+
+      - name: Acompanhar rolling update
+        run: kubectl rollout status deployment/${{ inputs.service }} -n fcg --timeout=600s
+
+      - name: Rollback automático
+        if: failure()
+        run: |
+          kubectl rollout undo deployment/${{ inputs.service }} -n fcg || true
+          kubectl rollout status deployment/${{ inputs.service }} -n fcg --timeout=300s || true
+
+      - name: Resumo
+        if: success()
+        env:
+          IMAGE: ${{ needs.image.outputs.image }}
+        run: |
+          {
+            echo "### 🚀 ${{ inputs.service }} em produção"
+            echo "Imagem: \`$IMAGE\`"
+            echo '```'
+            kubectl get pods -n fcg -l app=${{ inputs.service }} -o wide
+            echo
+            kubectl rollout history deployment/${{ inputs.service }} -n fcg | tail -n 5
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

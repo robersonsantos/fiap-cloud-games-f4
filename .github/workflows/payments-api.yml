@@ -1,0 +1,27 @@
+name: payments-api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "PaymentsAPI/**"
+      - ".github/workflows/payments-api.yml"
+      - ".github/workflows/_service-pipeline.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "PaymentsAPI/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/_service-pipeline.yml
+    # Repassa AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY para o workflow reutilizável
+    secrets: inherit
+    with:
+      service: payments-api
+      path: PaymentsAPI
+      solution: PaymentsAPI.slnx

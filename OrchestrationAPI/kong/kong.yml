@@ -1,0 +1,91 @@
+# Configuração declarativa do Kong API Gateway (DB-less) — FCG Fase 4
+#
+# O Kong é o ponto de entrada único do sistema:
+#   • Roteia requisições para UsersAPI e CatalogAPI.
+#   • Valida o token JWT (HS256, mesma chave compartilhada usada pelos serviços)
+#     nas rotas protegidas, antes mesmo de a requisição chegar aos microsserviços.
+#
+# O plugin "jwt" identifica o consumer pela claim "iss" do token
+# (iss = "FCG-UsersAPI", emitido pela UsersAPI no login).
+#
+# Fase 4 — Zero Hardcoded Credentials: este arquivo é um TEMPLATE. O marcador __JWT_KEY__
+# é substituído na subida do Kong (initContainer no EKS / serviço kong-config no compose)
+# pelo valor do Secret. O campo jwt_secrets.secret do Kong não aceita referência de vault.
+
+_format_version: "3.0"
+_transform: true
+
+# Política global de CORS: permite que páginas de demonstração
+# chamem o gateway direto do navegador. O Kong responde o preflight (OPTIONS) antes do
+# plugin jwt; por isso as rotas públicas com filtro de método também aceitam OPTIONS.
+plugins:
+  - name: cors
+    config:
+      origins: ["*"]
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      headers: ["Authorization", "Content-Type", "Accept"]
+      exposed_headers: ["X-Response-Time-Ms"]
+      credentials: false
+      max_age: 3600
+
+consumers:
+  - username: fcg-users-api
+    jwt_secrets:
+      - key: "FCG-UsersAPI"
+        algorithm: HS256
+        secret: "__JWT_KEY__"
+
+services:
+  # ─── UsersAPI ────────────────────────────────────────────────────────────────
+  - name: users-api
+    url: http://users-api:8080
+    routes:
+      # Login — público
+      - name: autenticacao
+        paths: ["/api/autenticacao"]
+        strip_path: false
+
+      # Cadastro de usuário — público
+      - name: usuarios-cadastro
+        paths: ["/api/usuarios"]
+        methods: ["POST", "OPTIONS"]
+        strip_path: false
+
+      # Demais operações de usuários — exigem JWT válido
+      - name: usuarios-protegido
+        paths: ["/api/usuarios"]
+        methods: ["GET", "PUT", "DELETE"]
+        strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+
+  # ─── CatalogAPI ──────────────────────────────────────────────────────────────
+  - name: catalog-api
+    url: http://catalog-api:8080
+    routes:
+      # Consulta de jogos, categorias, avaliações e busca (OpenSearch) — público
+      - name: catalogo-leitura
+        paths: ["/api/jogos", "/api/categorias", "/api/catalogo", "/search"]
+        methods: ["GET", "OPTIONS"]
+        strip_path: false
+
+      # Mutações do catálogo, compra e avaliações — exigem JWT válido
+      - name: catalogo-protegido
+        paths: ["/api/jogos", "/api/categorias"]
+        methods: ["POST", "PUT", "DELETE"]
+        strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+
+      # Biblioteca do usuário — exige JWT válido
+      - name: biblioteca
+        paths: ["/api/biblioteca"]
+        strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]

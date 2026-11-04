@@ -1,0 +1,101 @@
+# UsersAPI — cadastro, autenticação (JWT) e autorização.
+# ${IMAGE} é preenchido pela pipeline (ECR + tag do commit). Credenciais vêm do Secret
+# fcg-secrets em tempo de execução; a connection string é montada no pod via $(VAR).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-api
+  namespace: fcg
+  labels:
+    app: users-api
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  # Rolling Update sem downtime: sobe 1 pod novo e só derruba um antigo quando o novo estiver Ready.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: users-api
+  template:
+    metadata:
+      labels:
+        app: users-api
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: users-api
+        image: ${IMAGE}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        envFrom:
+        - configMapRef:
+            name: fcg-shared-config
+        env:
+        - name: SA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: SA_PASSWORD
+        - name: ConnectionStrings__DefaultConnection
+          value: "Server=sqlserver,1433;Database=FCG_Users;User Id=sa;Password=$(SA_PASSWORD);TrustServerCertificate=True"
+        - name: Jwt__Chave
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: JWT_KEY
+        - name: RabbitMQ__Username
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: RABBITMQ_USER
+        - name: RabbitMQ__Password
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: RABBITMQ_PASSWORD
+        - name: Admin__Email
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: ADMIN_EMAIL
+        - name: Admin__Senha
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: ADMIN_PASSWORD
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "384Mi"
+            cpu: "500m"
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 36
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 10
+          failureThreshold: 3
+        lifecycle:
+          # Dá tempo ao Kong/kube-proxy de retirar o pod do balanceamento antes do SIGTERM.
+          preStop:
+            exec:
+              command: ["sleep", "5"]

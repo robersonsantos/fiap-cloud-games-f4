@@ -1,0 +1,16 @@
+# Exposição pública do gateway no EKS: o Service do tipo LoadBalancer faz a AWS
+# provisionar um Elastic Load Balancer (subnets públicas marcadas com kubernetes.io/role/elb=1).
+#   kubectl get svc kong -n fcg   →   EXTERNAL-IP = DNS do ELB
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong
+  namespace: fcg
+spec:
+  selector:
+    app: kong
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+  type: LoadBalancer

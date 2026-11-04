@@ -1,0 +1,32 @@
+# Configuração NÃO sensível compartilhada pelos microsserviços.
+# Tudo que é credencial fica no Secret "fcg-secrets", criado pela pipeline a partir dos GitHub Secrets
+# (veja .github/workflows e deploy/scripts/sync-secrets.sh). Nenhuma senha é versionada.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fcg-shared-config
+  namespace: fcg
+data:
+  # JWT (emissor/audiência — a chave vai no Secret)
+  Jwt__Emissor: "FCG-UsersAPI"
+  Jwt__Audiencia: "FCG-Microsservicos"
+  Jwt__ExpiracaoHoras: "8"
+
+  # Mensageria
+  RabbitMQ__Host: "rabbitmq"
+
+  # Filas
+  Queues__UserCreated: "fcg.user.created"
+  Queues__OrderPlaced: "fcg.order.placed"
+  Queues__PaymentProcessed: "fcg.payment.processed"
+
+  # Pagamentos
+  Payment__TaxaAprovacaoPercent: "80"
+
+  # NoSQL / Cache / Busca (endereços internos; credenciais no Secret)
+  MongoDb__Database: "FCG_Catalog"
+  OpenSearch__IndexName: "fcg-jogos"
+
+  # Ambiente
+  ASPNETCORE_ENVIRONMENT: "Production"
+  DOTNET_ENVIRONMENT: "Production"

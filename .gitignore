@@ -1,0 +1,32 @@
+# .NET
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+.vs/
+
+# Segredos locais — nunca versionar
+*accessKeys*.csv
+*credentials*.csv
+*.pem
+.env
+.env.*
+!.env.example
+*.secret.yaml
+kubeconfig*
+
+# Terraform (o state contém as senhas geradas)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+*.tfplan
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

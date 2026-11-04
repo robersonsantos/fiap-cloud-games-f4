@@ -1,0 +1,8 @@
+# Copie para terraform.tfvars (arquivo ignorado pelo Git) e ajuste.
+# A organização AWS desta conta só libera a região us-east-2 (Ohio).
+region           = "us-east-2"
+budget_email     = "seu-email@exemplo.com"
+budget_limit_usd = 30
+
+# Para economizar (~70%) com risco de interrupção dos nós:
+# node_capacity_type = "SPOT"

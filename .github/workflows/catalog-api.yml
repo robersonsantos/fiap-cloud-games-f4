@@ -1,0 +1,27 @@
+name: catalog-api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "CatalogAPI/**"
+      - ".github/workflows/catalog-api.yml"
+      - ".github/workflows/_service-pipeline.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "CatalogAPI/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/_service-pipeline.yml
+    # Repassa AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY para o workflow reutilizável
+    secrets: inherit
+    with:
+      service: catalog-api
+      path: CatalogAPI
+      solution: CatalogAPI.slnx

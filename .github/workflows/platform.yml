@@ -1,0 +1,83 @@
+# Plataforma no EKS: namespace, StorageClass, Secrets, bancos (SQL Server/MongoDB),
+# cache (Redis), mensageria (RabbitMQ), API Gateway (Kong + Load Balancer) e monitoramento.
+name: platform
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "OrchestrationAPI/k8s/**"
+      - "OrchestrationAPI/kong/**"
+      - "deploy/**"
+      - ".github/workflows/platform.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+  EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME || 'fcg' }}
+  APP_SECRET_ID: ${{ vars.APP_SECRET_ID || 'fcg/app' }}
+  K8S: OrchestrationAPI/k8s
+
+concurrency:
+  group: deploy-platform
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Credenciais AWS (GitHub Secrets)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: kubeconfig
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+
+      - name: Namespace, StorageClass e configuração
+        run: |
+          kubectl apply -f $K8S/namespace.yaml
+          kubectl apply -f $K8S/storageclass.yaml
+          kubectl apply -f $K8S/shared-configmap.yaml
+          bash deploy/scripts/sync-secrets.sh
+          kubectl create configmap kong-config-template -n fcg \
+            --from-file=kong.yml=OrchestrationAPI/kong/kong.yml \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Dados, cache e mensageria
+        run: |
+          kubectl apply -f $K8S/sqlserver/
+          kubectl apply -f $K8S/mongodb/
+          kubectl apply -f $K8S/redis/
+          kubectl apply -f $K8S/rabbitmq/
+
+      - name: API Gateway e monitoramento
+        run: |
+          kubectl apply -f $K8S/kong/
+          kubectl apply -f $K8S/monitoring/
+          # O template do Kong vem de um ConfigMap: reinicia em rolling update para recarregar.
+          kubectl rollout restart deployment/kong -n fcg
+
+      - name: Aguardar componentes
+        run: |
+          for d in sqlserver mongodb redis rabbitmq kong prometheus grafana; do
+            kubectl rollout status deployment/$d -n fcg --timeout=600s
+          done
+
+      - name: Endereço público
+        run: |
+          for i in $(seq 1 30); do
+            HOST=$(kubectl get svc kong -n fcg -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+            [ -n "$HOST" ] && break
+            sleep 10
+          done
+          echo "### 🌐 Gateway: http://$HOST" >> "$GITHUB_STEP_SUMMARY"
+          kubectl get pods,svc -n fcg
