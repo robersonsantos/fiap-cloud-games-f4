@@ -1,6 +1,6 @@
 # Roteiro do Vídeo — Tech Challenge Fase 4 ("Pitch Final")
 
-**Duração máxima:** 25 minutos (vídeo final: **17:04**) · **Participantes:** 4 pessoas · gravação **sem áudio** (narração inserida depois nas marcações)
+**Duração máxima:** 25 minutos (vídeo final: **12:47**, sincronizado com as falas) · **Participantes:** 4 pessoas · gravação **sem áudio** (narração inserida depois nas marcações)
 **Fonte:** *Entregáveis da Fase 4* no `TC NETT - Fase 4.pdf`
 **Texto de cada pessoa, cena a cena:** [FALAS-VIDEO-FASE4.md](FALAS-VIDEO-FASE4.md)
 
