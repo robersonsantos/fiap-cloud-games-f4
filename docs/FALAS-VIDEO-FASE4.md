@@ -57,7 +57,7 @@ Os comandos e o que aparece na tela de cada cena estão no [ROTEIRO-VIDEO-FASE4.
 ### C01 · Glayson · 0:05 a 1:25 (80 s)
 **[TELA]** Slide/título "FIAP Cloud Games — Fase 4" → diagrama de arquitetura do README.
 
-> Olá! Nós somos o Grupo 94: eu sou o Glayson, e comigo estão o Diogo, o Roberson e o Jhonatan.
+> Olá! Nós somos o Grupo 90: eu sou o Glayson, e comigo estão o Diogo, o Roberson e o Jhonatan.
 > Este é o pitch final da FIAP Cloud Games.
 >
 > Na fase anterior, a plataforma ficou distribuída e observável, com API Gateway, mensageria e métricas.
@@ -303,4 +303,4 @@ mensagem nova no loop → `kubectl rollout history`.
 >
 > Toda a documentação, o Terraform, os manifestos Kubernetes e as pipelines estão no repositório.
 >
-> Obrigado pela atenção! Este foi o Grupo 94.
+> Obrigado pela atenção! Este foi o Grupo 90.

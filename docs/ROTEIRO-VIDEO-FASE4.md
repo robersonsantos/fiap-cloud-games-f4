@@ -46,7 +46,7 @@
 
 ## Bloco 0 — Abertura (Pessoa 1 · C01 · 0:05–1:25)
 
-> "Somos o Grupo 94. Na Fase 4 levamos a FIAP Cloud Games para a AWS: Kubernetes gerenciado no EKS,
+> "Somos o Grupo 90. Na Fase 4 levamos a FIAP Cloud Games para a AWS: Kubernetes gerenciado no EKS,
 > deploy automático com GitHub Actions, persistência poliglota com SQL Server e MongoDB, cache com Redis
 > e busca avançada com Amazon OpenSearch, sem nenhuma senha no código."
 

@@ -2,7 +2,7 @@
 
 ## Equipe
 
-- **Nome do grupo:** Grupo 94
+- **Nome do grupo:** Grupo 90
 - **Participantes e usernames no Discord:**
   - Diogo Henrique Figueiredo Alves da Silva — `diogo_henrique` — RM 372819
   - Roberson Rabelo dos Santos — `Roberson Rabelo` — RM 371058
